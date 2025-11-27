@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from src.models import BaseModel
 
 
-@dataclass
+@dataclass(frozen=True)
 class SIRModelState:
     """
     Represent the state of the SIR model
@@ -29,7 +29,23 @@ class SIRModelState:
 
     @property
     def N(self):
+        """Total number of population"""
         return self.S + self.I + self.R
+
+
+@dataclass
+class SIRModelStateChange:
+    """Represent the change in each compartment
+    
+    Args:
+        dS (float): Change in the number of susceptibles.
+        dI (float): Change in the number of infectives.
+        dR (float): Change in the number of recovered cases.
+    """
+    dS: float
+    dI: float
+    dR: float
+
 
 
 @dataclass(frozen=True)
@@ -63,10 +79,28 @@ class SIRModel(BaseModel):
 
     @staticmethod
     def calculate_change(state: SIRModelState, params: SIRModelParam):
+        """Calcuate the change according to the SIR model
+
+        Args:
+            state (SIRModelState): The current state of the SIR model
+            params (SIRModelParam): The params of the SIR model
+
+        Returns:
+            SIRModelStateChange: The change in each compartment in the next
+            time step
+        """
         S, I, R = state.S, state.I, state.R
         mu, beta = params.mu, params.beta
         N = state.N
         dSt_dt = -beta * S * I / N
         dIt_dt = beta * S * I / N - mu * I
         dRt_dt = mu * I
-        return SIRModelState(S + dSt_dt, I + dIt_dt, R + dRt_dt)
+        return SIRModelStateChange(dSt_dt, dIt_dt, dRt_dt)
+
+    def update_change(self, change: SIRModelStateChange):
+        "Apply the change to the current state"
+        self.state = SIRModelState(
+            self.state.S + change.dS,
+            self.state.I + change.dI,
+            self.state.R + change.dR,
+        )
