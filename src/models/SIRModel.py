@@ -1,64 +1,109 @@
 from dataclasses import dataclass
-from src.models import BaseModel
+from types import NotImplementedType
+from typing import Self
+
+from src.models.BaseModel import BaseModel
+
+
+@dataclass(frozen=True)
+class SIRModelStateChange:
+    """Represent the change in each compartment
+
+    Args:
+        dS (float): Change in the number of susceptibles.
+        dI (float): Change in the number of infectives.
+        dR (float): Change in the number of recovered cases.
+    """
+
+    dS: float
+    dI: float
+    dR: float
+
+    def __add__(self, other: object) -> "SIRModelStateChange" | NotImplementedType:
+        """This function allows adding two change objects.
+        Note: To avoid conflicts with addition involving `SIRModelState`, we
+        first check whether the operand is of the same type. If not, we defer
+        to the other class to handle the addition.
+
+        Ref:
+        https://docs.python.org/3/reference/datamodel.html#emulating-numeric-types
+
+        Args:
+            other (Self): _description_
+
+        Returns:
+            Self | NotImplemented: _description_
+        """
+        if isinstance(other, SIRModelStateChange):
+            # State + Change -> new State
+            return SIRModelStateChange(
+                self.dS + other.dS,
+                self.dI + other.dI,
+                self.dR + other.dR,
+            )
+        return NotImplemented
+
+    def __radd__(self, change: Self) -> "SIRModelStateChange" | NotImplementedType:
+        if isinstance(change, SIRModelStateChange):
+            return self.__add__(change)
+        return NotImplemented
 
 
 @dataclass(frozen=True)
 class SIRModelState:
     """
     Represent the state of the SIR model
-    
+
     Args:
         S (float): Susceptible population at a given time step.
         I (float): Infectious population at a given time step.
         R (float): Recovered or removed population at a given time step.
     """
+
     S: float = 0.0
     I: float = 0.0
     R: float = 0.0
-    
+
     def __post_init__(self):
         if self.S < 0:
-            raise ValueError(
-                f"S (number of susceptibles) must be > 0, got {self.S}")
+            raise ValueError(f"S (number of susceptibles) must be > 0, got {self.S}")
         if self.I < 0:
-            raise ValueError(
-                f"I (number of infectives) must be > 0, got {self.I}")
+            raise ValueError(f"I (number of infectives) must be > 0, got {self.I}")
         if self.R < 0:
-            raise ValueError(
-                f"R (number of recovered cases) must be > 0, got {self.R}")
+            raise ValueError(f"R (number of recovered cases) must be > 0, got {self.R}")
 
     @property
     def N(self):
         """Total number of population"""
         return self.S + self.I + self.R
 
+    def __add__(self, change: SIRModelStateChange):
+        if not isinstance(change, SIRModelStateChange):
+            raise TypeError(
+                "Only supports addition between SIRModelState "
+                "and SIRModelStateChange."
+            )
+        new_state = SIRModelState(
+            self.S + change.dS, self.I + change.dI, self.R + change.dR
+        )
+        return new_state
 
-@dataclass
-class SIRModelStateChange:
-    """Represent the change in each compartment
-    
-    Args:
-        dS (float): Change in the number of susceptibles.
-        dI (float): Change in the number of infectives.
-        dR (float): Change in the number of recovered cases.
-    """
-    dS: float
-    dI: float
-    dR: float
-
+    def __radd__(self, change: SIRModelStateChange):
+        return self.__add__(change)
 
 
 @dataclass(frozen=True)
 class SIRModelParam:
     """The parameters of the SIR model
-    
+
     Args:
         beta (float): Infectious rate for susceptibles
         mu (float): Recovery rate for infectives
     """
+
     beta: float
     mu: float
-    
+
     def __post_init__(self):
         if self.beta < 0:
             raise ValueError(f"beta must be >= 0, got {self.beta}")
@@ -66,19 +111,20 @@ class SIRModelParam:
             raise ValueError(f"mu must be >= 0, got {self.mu}")
 
 
-class SIRModel(BaseModel):
+class SIRModel(BaseModel[SIRModelState, SIRModelStateChange]):
     """The classic Compartmental models SIR model in Epidemiology
 
     Args:
         BaseModel (SIRModelState): Model state
     """
+
     def __init__(self, state: SIRModelState):
         self.time_step = 0.0
         self.state = state
 
-
     @staticmethod
-    def calculate_change(state: SIRModelState, params: SIRModelParam):
+    def calculate_change(
+        state: SIRModelState, params: SIRModelParam) -> SIRModelStateChange:
         """Calcuate the change according to the SIR model
 
         Args:
@@ -97,10 +143,6 @@ class SIRModel(BaseModel):
         dRt_dt = mu * I
         return SIRModelStateChange(dSt_dt, dIt_dt, dRt_dt)
 
-    def update_change(self, change: SIRModelStateChange):
+    def update_state(self, change: SIRModelStateChange):
         "Apply the change to the current state"
-        self.state = SIRModelState(
-            self.state.S + change.dS,
-            self.state.I + change.dI,
-            self.state.R + change.dR,
-        )
+        self.state = self.state + change
