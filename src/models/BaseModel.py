@@ -7,11 +7,14 @@ ChangeT = TypeVar("ChangeT", covariant=True)
 
 @runtime_checkable
 class BaseModel(Protocol[StateT, ChangeT]):
-    @staticmethod
-    def calculate_change(*args, **kwargs) -> ChangeT:
+
+    def calculate_change(self, *args, **kwargs) -> ChangeT:
         """Compute the state change for the current step."""
         ...
 
     def update_state(self, *args, **kwargs) -> StateT:
         """Apply the change to the state."""
+        ...
+
+    def loop(self, num_time_step) -> None:
         ...

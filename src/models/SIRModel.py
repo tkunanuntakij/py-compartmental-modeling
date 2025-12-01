@@ -1,3 +1,4 @@
+from __future__ import annotations
 from dataclasses import dataclass
 from types import NotImplementedType
 from typing import Self
@@ -19,7 +20,7 @@ class SIRModelStateChange:
     dI: float
     dR: float
 
-    def __add__(self, other: object) -> "SIRModelStateChange" | NotImplementedType:
+    def __add__(self, other: object) -> SIRModelStateChange | NotImplementedType:
         """This function allows adding two change objects.
         Note: To avoid conflicts with addition involving `SIRModelState`, we
         first check whether the operand is of the same type. If not, we defer
@@ -43,7 +44,7 @@ class SIRModelStateChange:
             )
         return NotImplemented
 
-    def __radd__(self, change: Self) -> "SIRModelStateChange" | NotImplementedType:
+    def __radd__(self, change: Self) -> SIRModelStateChange | NotImplementedType:
         if isinstance(change, SIRModelStateChange):
             return self.__add__(change)
         return NotImplemented
@@ -115,16 +116,17 @@ class SIRModel(BaseModel[SIRModelState, SIRModelStateChange]):
     """The classic Compartmental models SIR model in Epidemiology
 
     Args:
-        BaseModel (SIRModelState): Model state
+        state (SIRModelState): Model state
+        params (SIRModelParam): Model parameters
     """
 
-    def __init__(self, state: SIRModelState):
+    def __init__(self, state: SIRModelState, params: SIRModelParam):
         self.time_step = 0.0
         self.state = state
+        self.params = params
+        self.history: list[SIRModelState] = []
 
-    @staticmethod
-    def calculate_change(
-        state: SIRModelState, params: SIRModelParam) -> SIRModelStateChange:
+    def calculate_change(self) -> SIRModelStateChange:
         """Calcuate the change according to the SIR model
 
         Args:
@@ -135,14 +137,25 @@ class SIRModel(BaseModel[SIRModelState, SIRModelStateChange]):
             SIRModelStateChange: The change in each compartment in the next
             time step
         """
-        S, I, R = state.S, state.I, state.R
-        mu, beta = params.mu, params.beta
-        N = state.N
+        S, I, R = self.state.S, self.state.I, self.state.R
+        mu, beta = self.params.mu, self.params.beta
+        N = self.state.N
         dSt_dt = -beta * S * I / N
         dIt_dt = beta * S * I / N - mu * I
         dRt_dt = mu * I
         return SIRModelStateChange(dSt_dt, dIt_dt, dRt_dt)
 
-    def update_state(self, change: SIRModelStateChange):
-        "Apply the change to the current state"
+    def step(
+        self
+        ) -> None:
+        change = self.calculate_change()
         self.state = self.state + change
+        self.time_step += 1
+
+    def loop(
+        self,
+        num_time_step: int
+    ):
+        for _ in range(num_time_step):
+            self.step()
+            self.history.append(self.state)
