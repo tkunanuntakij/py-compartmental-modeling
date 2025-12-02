@@ -1,2 +1,2 @@
-from .BaseModel import BaseModel
-from .SIRModel import *
+from .base_model import BaseModel
+from .sir_model import *

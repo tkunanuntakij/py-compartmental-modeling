@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from types import NotImplementedType
 from typing import Self
 
-from src.models.BaseModel import BaseModel
+from src.models.base_model import BaseModel
 
 
 @dataclass(frozen=True)
